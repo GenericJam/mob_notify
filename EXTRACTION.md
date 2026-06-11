@@ -53,7 +53,13 @@ not worth blocking Wave 2. Same call as camera's preview.
   `MobBridge.kt.eex`; KEEP `MobFirebaseService.kt.eex`, the manifest
   `<service>`, `POST_NOTIFICATIONS`→ moves to plugin manifest (template drops
   it), AppDelegate push-token call, google-services wiring (host-level).
-- [~] **Stage 4:** ANDROID DONE (Moto G 2026-06-11, demo 20d4c34): first
+- [x] **Stage 4 (local notifications cross-platform; live push pending):** Android +
+  iOS verified. iOS (iPhone SE 2026-06-11): :notifications authorization granted →
+  schedule → banner → FOREGROUND DELIVERY back to the scheduling process through
+  the mob_notify_set_screen_pid seam ({:notification, %{id, source: :local, data}}).
+  GOTCHA worth keeping: an UNAUTHORIZED iOS app drops scheduled notifications
+  SILENTLY — probes/tests must Mob.Permissions.request(:notifications) first
+  (Android < 13 needs no grant, which masks this). Originally: ANDROID DONE (Moto G 2026-06-11, demo 20d4c34): first
   native compile zero-iteration; schedule → notification FIRED in the shade
   (plugin alarm → host receiver via the hub channel); cancel → never fired;
   register_push path clean (placeholder google-services.json → token fetch
