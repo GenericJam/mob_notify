@@ -45,17 +45,22 @@ not worth blocking Wave 2. Same call as camera's preview.
   `pendingToken`; host delivery code reads the hub. The alarm intent targets
   the host's NotificationReceiver via dynamic
   `setClassName(packageName + ".NotificationReceiver")`. `bridge_kt` added.
-- [ ] **Stage 2 (core strip, mob repo):** delete `lib/mob/notify.ex`, the 3 erl
+- [x] **Stage 2 (core strip, mob repo, merged 1f2b38a):** delete `lib/mob/notify.ex`, the 3 erl
   stubs, `ios/mob_nif.m:3238-3319`, the zig blocks + caches; ADD the
   `mob_notify_set_screen_pid` export next to the delegate (delivery stays).
   `take_launch_notification` + delegate + `mob_send_push_token` untouched.
-- [ ] **Stage 3 (template strip, mob_new):** remove `notify_*` from
+- [x] **Stage 3 (template strip, mob_new, merged e6667e6):** remove `notify_*` from
   `MobBridge.kt.eex`; KEEP `MobFirebaseService.kt.eex`, the manifest
   `<service>`, `POST_NOTIFICATIONS`→ moves to plugin manifest (template drops
   it), AppDelegate push-token call, google-services wiring (host-level).
-- [ ] **Stage 4:** device verify both platforms (schedule → fires; cancel;
-  register_push → `{:push_token, ...}` with a real Firebase/APNs app), demo
-  activation, sign, docs, CHANGELOG.
+- [~] **Stage 4:** ANDROID DONE (Moto G 2026-06-11, demo 20d4c34): first
+  native compile zero-iteration; schedule → notification FIRED in the shade
+  (plugin alarm → host receiver via the hub channel); cancel → never fired;
+  register_push path clean (placeholder google-services.json → token fetch
+  noop, expected; a real Firebase project is needed for a live token).
+  REMAINING: iOS device build (USB replug), live push end-to-end with real
+  APNs/FCM credentials + mob_push, signing, docs, CHANGELOG, and the
+  recorded iOS source:"local" delegate drift fix.
 
 ## mob_push contract
 
