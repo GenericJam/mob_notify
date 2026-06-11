@@ -21,8 +21,8 @@
   # (its request flow is part of core's permission enum on both platforms and is
   # used by core delivery). Revisit when the permission registry owns all caps.
   android: %{
-    # bridge_kt is added in Stage 1b when the Kotlin bridge is drafted
-    # (see EXTRACTION.md for the staged plan).
+    bridge_kt: "priv/native/android/MobNotifyBridge.kt",
+    bridge_class: "io.mob.notify.MobNotifyBridge",
     permissions: [
       "android.permission.POST_NOTIFICATIONS"
     ],
@@ -51,6 +51,9 @@
       "are host-level, a plugin manifest can't contribute them.",
     "iOS: the host AppDelegate must forward the APNs device token: in " <>
       "didRegisterForRemoteNotificationsWithDeviceToken call mob_send_push_token(hex) " <>
-      "(exported by mob core; the mob_new template ships this wired)."
+      "(exported by mob core; the mob_new template ships this wired).",
+    "Android: scheduled notifications display via a <applicationId>.NotificationReceiver " <>
+      "BroadcastReceiver declared in AndroidManifest (the mob_new template ships it) — " <>
+      "display/tap delivery stays host-side; this plugin only arms the alarm."
   ]
 }

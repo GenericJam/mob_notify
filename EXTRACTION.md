@@ -38,11 +38,13 @@ not worth blocking Wave 2. Same call as camera's preview.
   `schedule_opts/1` seam), erl stubs, manifest (perms/gradle/frameworks/
   host_requirements), mob_push CONTRACT FIXTURES (see below), test suite,
   this document.
-- [ ] **Stage 1b:** extract the three native layers (iOS .m lines above —
-  replacing direct `g_notif_delegate` setup with a call to a NEW core export
-  `mob_notify_set_screen_pid(ErlNifPid)`; Android zig location-pattern; Kotlin
-  `MobNotifyBridge` with plugin-owned deliver thunks for the token). Add
-  `bridge_kt` to the manifest.
+- [x] **Stage 1b (2026-06-11):** the three native layers extracted. iOS .m calls
+  the NEW core export `mob_notify_set_screen_pid(ErlNifPid)`. Android: the
+  shared state moved to the GENERATED `io.mob.plugin.MobNotifyHub` (written by
+  mob_dev next to MobActivityAware) — the bridge sets `notifyPid`/drains
+  `pendingToken`; host delivery code reads the hub. The alarm intent targets
+  the host's NotificationReceiver via dynamic
+  `setClassName(packageName + ".NotificationReceiver")`. `bridge_kt` added.
 - [ ] **Stage 2 (core strip, mob repo):** delete `lib/mob/notify.ex`, the 3 erl
   stubs, `ios/mob_nif.m:3238-3319`, the zig blocks + caches; ADD the
   `mob_notify_set_screen_pid` export next to the delegate (delivery stays).
