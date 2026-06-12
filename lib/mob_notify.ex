@@ -19,7 +19,7 @@ defmodule MobNotify do
         id:    "reminder_1",
         title: "Time to check in",
         body:  "Open the app to see today's updates",
-        at:    ~U[2026-04-16 09:00:00Z],   # or delay_seconds: 60
+        at:    ~U[2027-04-16 09:00:00Z],   # or delay_seconds: 60
         data:  %{screen: "reminders"}
       )
 

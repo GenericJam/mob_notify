@@ -39,7 +39,7 @@
   },
   # Manual host-app steps the build can't automate; printed as a warning on
   # every `mix mob.deploy --native` of the host. mob_new-generated apps already
-  # satisfy all three via their templates.
+  # satisfy all of these via their templates.
   host_requirements: [
     "Android: AndroidManifest.xml must declare the FCM service inside <application>: " <>
       ~s(<service android:name=".MobFirebaseService" android:exported="false"> ) <>
