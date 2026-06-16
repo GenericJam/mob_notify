@@ -83,6 +83,18 @@ satisfy all of them via their templates**; hand-rolled hosts must add:
 - The wire contract with mob_push is pinned by shared fixtures
   (`test/fixtures/push_contract.exs`, vendored identically in both repos).
 
+## Development
+
+Clone, then run once:
+
+```bash
+mix setup
+```
+
+That fetches deps and activates the repo's git hooks (`.githooks/pre-push`):
+`mix format --check`, `mix credo --strict` (incl. ExSlop), and `mix compile --warnings-as-errors` run on every push, plus the full test
+suite when `mix.exs` changes — the same gate CI enforces before publishing.
+
 ## License
 
 MIT
