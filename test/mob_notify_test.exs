@@ -32,23 +32,97 @@ defmodule MobNotifyTest do
       assert android.lang == :zig
     end
 
-    test "declares POST_NOTIFICATIONS + the FCM client dep", %{manifest: m} do
+    test "declares POST_NOTIFICATIONS + SCHEDULE_EXACT_ALARM + RECEIVE_BOOT_COMPLETED + the FCM client dep",
+         %{manifest: m} do
       assert "android.permission.POST_NOTIFICATIONS" in m.android.permissions
+      assert "android.permission.SCHEDULE_EXACT_ALARM" in m.android.permissions
+      assert "android.permission.RECEIVE_BOOT_COMPLETED" in m.android.permissions
       assert Enum.any?(m.android.gradle_deps, &(&1 =~ "firebase-messaging"))
     end
 
-    test "declares all four host requirements (FCM service, google-services, AppDelegate token, receiver)",
+    test "declares all five host requirements (FCM service, google-services, AppDelegate token, receiver, boot receiver)",
          %{manifest: m} do
-      assert length(m.host_requirements) == 4
+      assert length(m.host_requirements) == 5
       assert Enum.any?(m.host_requirements, &(&1 =~ "MobFirebaseService"))
       assert Enum.any?(m.host_requirements, &(&1 =~ "google-services"))
       assert Enum.any?(m.host_requirements, &(&1 =~ "mob_send_push_token"))
       assert Enum.any?(m.host_requirements, &(&1 =~ "NotificationReceiver"))
+
+      assert Enum.any?(
+               m.host_requirements,
+               &(&1 =~ "MobNotifyBootReceiver" and &1 =~ "BOOT_COMPLETED")
+             )
     end
 
     test "ships the Kotlin bridge the manifest references", %{manifest: m} do
       assert m.android.bridge_class == "io.mob.notify.MobNotifyBridge"
       assert File.exists?(Path.join(@plugin_dir, m.android.bridge_kt))
+    end
+  end
+
+  describe "android exact-alarm guard (regression)" do
+    # Android 12+ gates exact alarms behind SCHEDULE_EXACT_ALARM special access;
+    # calling setExact* without it throws and the whole schedule silently failed.
+    # The arm path must guard on canScheduleExactAlarms() and fall back to an
+    # inexact alarm. The guard lives in the shared MobNotifySchedules object
+    # (used by both the bridge and the boot receiver), declared in the same
+    # bridge_kt file. Source-level because JNI/AlarmManager isn't exercisable
+    # from mix test (see CLAUDE.md).
+    setup do
+      {:ok, m} = Manifest.load(@plugin_dir)
+      %{src: File.read!(Path.join(@plugin_dir, m.android.bridge_kt))}
+    end
+
+    test "guards setExact with canScheduleExactAlarms", %{src: src} do
+      assert src =~ "canScheduleExactAlarms"
+    end
+
+    test "has an inexact fallback so a notification still fires without the grant", %{src: src} do
+      assert src =~ "setAndAllowWhileIdle"
+    end
+  end
+
+  describe "android boot re-arm (RECEIVE_BOOT_COMPLETED)" do
+    # AlarmManager alarms are wiped on reboot, so scheduled notifications vanish.
+    # notify_schedule persists the schedule and MobNotifyBootReceiver re-arms
+    # still-future entries on ACTION_BOOT_COMPLETED. The shared logic lives in the
+    # MobNotifySchedules object so the bridge and the receiver arm identically.
+    # Everything is declared in the one bridge_kt file (mob_dev copies + signs
+    # exactly that path — sibling .kt files wouldn't be compiled/signed). Source-
+    # level because JNI/AlarmManager isn't exercisable from mix test.
+    setup do
+      {:ok, m} = Manifest.load(@plugin_dir)
+      %{src: File.read!(Path.join(@plugin_dir, m.android.bridge_kt))}
+    end
+
+    test "ships the boot receiver as a BroadcastReceiver in io.mob.notify", %{src: src} do
+      assert src =~ "package io.mob.notify"
+      assert src =~ "class MobNotifyBootReceiver"
+      assert src =~ "BroadcastReceiver"
+    end
+
+    test "the boot receiver re-arms on BOOT_COMPLETED", %{src: src} do
+      assert src =~ "ACTION_BOOT_COMPLETED"
+      assert src =~ "rearmAll"
+    end
+
+    test "notify_schedule persists the schedule (so a reboot can re-arm)", %{src: src} do
+      # The bridge delegates persistence to the shared object, which writes the
+      # schedule (keyed by id) to SharedPreferences.
+      assert src =~ "MobNotifySchedules.schedule"
+      assert src =~ "getSharedPreferences"
+      assert src =~ "trigger_at_ms"
+    end
+
+    test "the shared object is used by both the bridge and the boot path", %{src: src} do
+      assert src =~ "object MobNotifySchedules"
+      # The re-arm reuses the same exact-alarm guard + inexact fallback.
+      assert src =~ "canScheduleExactAlarms"
+      assert src =~ "setAndAllowWhileIdle"
+      # Past-due entries are skipped on re-arm.
+      assert src =~ "System.currentTimeMillis"
+      # The boot receiver calls into the shared object.
+      assert src =~ "MobNotifySchedules.rearmAll"
     end
   end
 
