@@ -24,7 +24,17 @@
     bridge_kt: "priv/native/android/MobNotifyBridge.kt",
     bridge_class: "io.mob.notify.MobNotifyBridge",
     permissions: [
-      "android.permission.POST_NOTIFICATIONS"
+      "android.permission.POST_NOTIFICATIONS",
+      # Exact-alarm scheduling (setExactAndAllowWhileIdle). Special-access on
+      # Android 13+; notify_schedule falls back to an inexact alarm when the user
+      # hasn't granted it. The plugin declares the permission it uses rather than
+      # leaning on the host manifest.
+      "android.permission.SCHEDULE_EXACT_ALARM",
+      # Boot re-arm. AlarmManager alarms are wiped on reboot; MobNotifyBootReceiver
+      # re-arms persisted schedules on ACTION_BOOT_COMPLETED, which requires this
+      # permission. The <receiver> itself can't be contributed by a plugin manifest
+      # (see host_requirements).
+      "android.permission.RECEIVE_BOOT_COMPLETED"
     ],
     gradle_deps: [
       # FCM client. The google-services GRADLE PLUGIN + google-services.json are
@@ -54,6 +64,12 @@
       "(exported by mob core; the mob_new template ships this wired).",
     "Android: scheduled notifications display via a <applicationId>.NotificationReceiver " <>
       "BroadcastReceiver declared in AndroidManifest (the mob_new template ships it) — " <>
-      "display/tap delivery stays host-side; this plugin only arms the alarm."
+      "display/tap delivery stays host-side; this plugin only arms the alarm.",
+    "Android: AndroidManifest.xml must declare the boot re-arm receiver inside <application>: " <>
+      ~s(<receiver android:name="io.mob.notify.MobNotifyBootReceiver" android:exported="true">) <>
+      ~s(<intent-filter><action android:name="android.intent.action.BOOT_COMPLETED" /></intent-filter></receiver>) <>
+      " — AlarmManager alarms are wiped on reboot; this receiver re-arms persisted " <>
+      "schedules on boot. A plugin manifest can't contribute a <receiver> fragment " <>
+      "(same limitation as mob_screencast's foreground <service>), so the host must add it."
   ]
 }
