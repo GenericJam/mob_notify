@@ -126,6 +126,61 @@ defmodule MobNotifyTest do
     end
   end
 
+  describe "android push-token registration delivery" do
+    # Firebase APIs and JNI are unavailable to host-side ExUnit, so pin the
+    # plugin-owned Kotlin/Zig contract that the native host build compiles.
+    setup do
+      {:ok, manifest} = Manifest.load(@plugin_dir)
+
+      %{
+        kotlin: File.read!(Path.join(@plugin_dir, manifest.android.bridge_kt)),
+        zig: File.read!(Path.join(@plugin_dir, "priv/native/jni/mob_notify_nif.zig"))
+      }
+    end
+
+    test "uses a plugin-owned error thunk with no host-package reference", %{kotlin: kotlin} do
+      assert kotlin =~
+               "external fun nativeDeliverNotifyPushTokenError(pid: Long, reason: String)"
+
+      assert kotlin =~ "nativeDeliverNotifyPushTokenError(pid, reason)"
+      refute kotlin =~ "com.example."
+      refute kotlin =~ "MobBridge.nativeDeliverAtom3"
+    end
+
+    test "delivers valid cached tokens and reports blank cached tokens", %{kotlin: kotlin} do
+      assert kotlin =~ "if (cached.isNotBlank())"
+      assert kotlin =~ "nativeDeliverNotifyPushToken(pid, cached)"
+      assert kotlin =~ ~s|deliverPushTokenError(pid, "cached_token_blank")|
+    end
+
+    test "delivers valid Firebase tokens and reports blank or failed fetches", %{kotlin: kotlin} do
+      assert kotlin =~ "if (!token.isNullOrBlank())"
+      assert kotlin =~ "nativeDeliverNotifyPushToken(pid, token)"
+      assert kotlin =~ ~s|deliverPushTokenError(pid, "firebase_token_blank")|
+      assert kotlin =~ "task.exception?.javaClass?.simpleName"
+      assert kotlin =~ ~s("firebase_token_fetch_failed")
+      assert kotlin =~ "deliverPushTokenError(pid, reason)"
+    end
+
+    test "the JNI error thunk sends the exact three-element BEAM message", %{zig: zig} do
+      assert [thunk] =
+               Regex.run(
+                 ~r/export fn Java_io_mob_notify_MobNotifyBridge_nativeDeliverNotifyPushTokenError\([\s\S]*?\n\}/,
+                 zig
+               )
+
+      assert thunk =~ ~s|erts.atom(env, "push_token_error")|
+      assert thunk =~ ~s|erts.atom(env, "android")|
+      assert thunk =~ "erts.enif_make_binary(env, &reason_bin)"
+      assert thunk =~ "erts.enif_send(null, &pid, env, msg)"
+
+      assert Regex.match?(
+               ~r/push_token_error[\s\S]*android[\s\S]*enif_make_binary/,
+               thunk
+             )
+    end
+  end
+
   describe "NIF stub agreement" do
     # Guards the .erl stub / manifest, not app code — VacuousTest can't see that.
     # credo:disable-for-next-line Jump.CredoChecks.VacuousTest
