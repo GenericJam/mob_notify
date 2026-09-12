@@ -6,6 +6,20 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versioning: [S
 
 ---
 
+## [Unreleased]
+
+### Fixed
+
+- **Manifest `mob_version` matches the actual mob dep** (MOB-81). The
+  plugin's `priv/mob_plugin.exs` pinned `mob_version: "~> 0.6"` while
+  `mix.exs` pulled `{:mob, "~> 0.7"}`. Once a consumer ran
+  `Manifest.validate/1`, the version-gate check would refuse the plugin
+  outright — the plugin as shipped worked in host builds because that
+  gate isn't invoked on every load. Bumped to `"~> 0.7"` to match the
+  runtime dep.
+
+---
+
 ## [0.1.1] - 2026-06-16
 
 ### Changed
