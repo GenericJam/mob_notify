@@ -4,14 +4,50 @@ defmodule MobNotify do
   `Mob.Notify` in Wave 2.
 
   Requires `:notifications` permission (request via `Mob.Permissions.request/2`).
-  No `Info.plist` key needed on iOS. Android 13+ (API 33) requires
-  `POST_NOTIFICATIONS`, declared by this plugin's manifest.
+  No `Info.plist` key needed on iOS for VISIBLE notifications. Silent APNs
+  (which powers `mob_wake`) needs additional wiring — see the mob_wake and
+  mob_push docs. Android 13+ (API 33) requires `POST_NOTIFICATIONS`,
+  declared by this plugin's manifest.
 
   All notifications arrive via `handle_info` regardless of app state (foreground,
   background, or relaunched after being killed). Delivery plumbing (the
   notification-center delegate, push-token forwarding, launch-notification
   handoff) lives in mob CORE — this plugin owns scheduling, cancellation, and
   push registration.
+
+  ## Which plugin do I actually want?
+
+  The notify/push/wake/background quartet gets mixed up regularly.
+  Four distinct concerns:
+
+  | I want to…                                             | Plugin                                                            |
+  |--------------------------------------------------------|-------------------------------------------------------------------|
+  | **Schedule** a local notification / **register** for push (device-side) | **`mob_notify`** (this plugin) |
+  | **Send** a push from my server                         | [`mob_push`](https://hexdocs.pm/mob_push) (server-side; no device code) |
+  | Run a handler when the OS wakes my app via silent push | [`mob_wake`](https://hexdocs.pm/mob_wake) (device-side)           |
+  | Keep my app alive while the user is on another screen  | [`mob_background`](https://hexdocs.pm/mob_background) (device-side) |
+
+  * **`mob_notify` vs `mob_push`:** two ends of the same wire.
+    `mob_notify` runs on the phone, requests notification permission,
+    calls `registerForRemoteNotifications` (iOS) / FCM token registration
+    (Android), and hands the resulting token to your code as
+    `{:push_token, platform, token}`. `mob_push` runs on your server,
+    takes that token plus a payload map, and sends it via APNs HTTP/2
+    or FCM v1. The wire contract between the two is pinned by shared
+    fixtures in `test/fixtures/push_contract.exs`, vendored identically
+    in both repos.
+  * **`mob_notify` vs `mob_wake`:** `mob_notify` is the *user-visible*
+    surface — schedule a banner, receive an ordinary push, register for
+    push. `mob_wake` is the *silent* surface — the OS wakes a specific
+    on-device handler with no user-facing UI. They pair at the token
+    layer: `MobNotify.register_push/1` gets you the device token that
+    `mob_push` needs to send a `mob_wake` payload.
+  * **`mob_notify` vs `mob_background`:** `mob_background` keeps the
+    app alive while the user is on another screen (silent-audio session
+    on iOS, foreground service on Android). Different lifecycle,
+    different entitlements. If your work only needs to run *when a push
+    arrives*, use `mob_wake`; if it needs to run *continuously while
+    backgrounded*, use `mob_background`.
 
   ## Local notifications
 
