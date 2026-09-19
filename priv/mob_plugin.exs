@@ -66,6 +66,18 @@
     "iOS: the host AppDelegate must forward the APNs device token: in " <>
       "didRegisterForRemoteNotificationsWithDeviceToken call mob_send_push_token(hex) " <>
       "(exported by mob core; the mob_new template ships this wired).",
+    "iOS silent APNs (mob_push -> mob_wake style): the host Info.plist needs " <>
+      "UIBackgroundModes.remote-notification (added to the mob_new template " <>
+      "2026-09-19 via MOB-271) — without it iOS won't wake a backgrounded app " <>
+      "on a content-available push.",
+    "iOS silent APNs (Apple Developer, out-of-band): the App ID must have " <>
+      "Push Notifications capability enabled in Apple Developer Portal, and its " <>
+      "provisioning profile must be regenerated afterwards. mob_dev's " <>
+      "resolve_or_generate_entitlements/4 reads aps-environment from the " <>
+      "embedded.mobileprovision — if the profile doesn't grant it, no APNs " <>
+      "device token will ever be issued and MobNotify.register_push silently " <>
+      "does nothing (didFailToRegisterForRemoteNotificationsWithError is the " <>
+      "surface — the mob_new AppDelegate template NSLogs it).",
     "Android: scheduled notifications display via a <applicationId>.NotificationReceiver " <>
       "BroadcastReceiver declared in AndroidManifest (the mob_new template ships it) — " <>
       "display/tap delivery stays host-side; this plugin only arms the alarm.",

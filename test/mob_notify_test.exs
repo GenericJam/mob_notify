@@ -40,9 +40,9 @@ defmodule MobNotifyTest do
       assert Enum.any?(m.android.gradle_deps, &(&1 =~ "firebase-messaging"))
     end
 
-    test "declares all five host requirements (FCM service, google-services, AppDelegate token, receiver, boot receiver)",
+    test "declares all seven host requirements (FCM service, google-services, AppDelegate token, receiver, boot receiver, iOS silent-APNs Info.plist, iOS silent-APNs Developer Portal)",
          %{manifest: m} do
-      assert length(m.host_requirements) == 5
+      assert length(m.host_requirements) == 7
       assert Enum.any?(m.host_requirements, &(&1 =~ "MobFirebaseService"))
       assert Enum.any?(m.host_requirements, &(&1 =~ "google-services"))
       assert Enum.any?(m.host_requirements, &(&1 =~ "mob_send_push_token"))
@@ -52,6 +52,9 @@ defmodule MobNotifyTest do
                m.host_requirements,
                &(&1 =~ "MobNotifyBootReceiver" and &1 =~ "BOOT_COMPLETED")
              )
+
+      assert Enum.any?(m.host_requirements, &(&1 =~ "remote-notification"))
+      assert Enum.any?(m.host_requirements, &(&1 =~ "Apple Developer Portal"))
     end
 
     test "ships the Kotlin bridge the manifest references", %{manifest: m} do
