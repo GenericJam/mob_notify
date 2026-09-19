@@ -1,9 +1,8 @@
 # Agent instructions
 
-This repo is a mob plugin extracted from mob core (Wave 2 of the plugin
-epic). Conventions are mob's — read `~/code/mob/AGENTS.md` +
-`~/code/mob/CLAUDE.md` first, and `~/code/mob/MOB_PLUGINS.md` for the
-manifest schema.
+Start with [`AGENTS.md`](AGENTS.md) — mob_notify-specific orientation.
+Then read `~/code/mob/AGENTS.md` + `~/code/mob/CLAUDE.md` for the system view
+and `~/code/mob/MOB_PLUGINS.md` for the manifest schema.
 
 Pre-commit checklist (same as mob):
 
