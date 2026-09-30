@@ -28,7 +28,8 @@ defmodule MobNotify do
   | Keep my app alive while the user is on another screen  | [`mob_background`](https://hexdocs.pm/mob_background) (device-side) |
 
   * **`mob_notify` vs `mob_push`:** two ends of the same wire.
-    `mob_notify` runs on the phone, requests notification permission,
+    `mob_notify` runs on the phone (notification permission itself is
+    requested via core's `Mob.Permissions.request/2`),
     calls `registerForRemoteNotifications` (iOS) / FCM token registration
     (Android), and hands the resulting token to your code as
     `{:push_token, platform, token}`. `mob_push` runs on your server,
