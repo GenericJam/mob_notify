@@ -42,7 +42,7 @@ defmodule MobNotifyTest do
 
     test "declares all seven host requirements (FCM service, google-services, AppDelegate token, receiver, boot receiver, iOS silent-APNs Info.plist, iOS silent-APNs Developer Portal)",
          %{manifest: m} do
-      assert length(m.host_requirements) == 7
+      assert [_, _, _, _, _, _, _] = m.host_requirements
       assert Enum.any?(m.host_requirements, &(&1 =~ "MobFirebaseService"))
       assert Enum.any?(m.host_requirements, &(&1 =~ "google-services"))
       assert Enum.any?(m.host_requirements, &(&1 =~ "mob_send_push_token"))
