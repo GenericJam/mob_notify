@@ -33,11 +33,11 @@ defmodule MobNotify.MixProject do
   end
 
   defp deps do
-    # Local path deps while the plugin system is dogfooded; switch :mob to the
-    # Hex constraint ("~> 0.6") when mob publishes. :mob_dev is test-only (the
+    # mob 0.9.8 delivers the documented `{:notification, map}` envelope
+    # (presentation/action, both platforms). :mob_dev is test-only (the
     # manifest tests run the real pre-publish validator) and never ships.
     [
-      {:mob, "~> 0.7"},
+      {:mob, "~> 0.9.8"},
       {:mob_dev, "~> 0.6", only: [:dev, :test], runtime: false},
       # Code quality — Credo + ex_slop (AI-pattern checks) + jump_credo_checks,
       # mirroring mob core's pre-commit gate.

@@ -10,7 +10,17 @@ defmodule MobNotify do
   declared by this plugin's manifest.
 
   All notifications arrive via `handle_info` regardless of app state (foreground,
-  background, or relaunched after being killed). Delivery plumbing (the
+  background, or relaunched after being killed) as `{:notification, notif}`, a
+  `Mob.Notification` map (mob > 0.9.7). Its `presentation` is `:foreground`
+  when the notification arrived while the app was open (the banner still shows)
+  and `:tap` when the user opened it, including the tap that launched the app,
+  which arrives once, at the root screen after it mounts. It goes to the process
+  that last called `register_push/1` (on iOS, also `schedule/2`) while it is
+  alive, otherwise to the screen showing. On Android, `:foreground` arrivals
+  and taps while nothing is registered need the `NotificationReceiver` and
+  `MainActivity` that mob_new 0.6.3 generates, and an app-owned
+  `MobFirebaseService` must add `"presentation": "foreground"` to the JSON it
+  hands mob; see the README. Delivery plumbing (the
   notification-center delegate, push-token forwarding, launch-notification
   handoff) lives in mob CORE — this plugin owns scheduling, cancellation, and
   push registration.
@@ -62,7 +72,7 @@ defmodule MobNotify do
 
       MobNotify.cancel(socket, "reminder_1")
 
-      def handle_info({:notification, %{id: id, data: data, source: :local}}, socket), do: ...
+      def handle_info({:notification, %{presentation: :tap, id: id, data: data, source: :local}}, socket), do: ...
 
   ## Push notifications (pairs with the `mob_push` package on your server)
 
@@ -72,7 +82,7 @@ defmodule MobNotify do
       def handle_info({:push_token, :ios,     token}, socket), do: ...
       def handle_info({:push_token, :android, token}, socket), do: ...
 
-      def handle_info({:notification, %{title: t, body: b, data: d, source: :push}}, socket), do: ...
+      def handle_info({:notification, %{presentation: :tap, title: t, body: b, data: d, source: :push}}, socket), do: ...
 
   `mob_push` is deliberately a SEPARATE package — it runs on your server (APNs
   HTTP/2 + FCM v1) with zero device/NIF code. The wire contract between the two
