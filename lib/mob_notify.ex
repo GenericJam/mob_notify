@@ -16,7 +16,11 @@ defmodule MobNotify do
   and `:tap` when the user opened it, including the tap that launched the app,
   which arrives once, at the root screen after it mounts. It goes to the process
   that last called `register_push/1` (on iOS, also `schedule/2`) while it is
-  alive, otherwise to the screen showing. Delivery plumbing (the
+  alive, otherwise to the screen showing. On Android, `:foreground` arrivals
+  and taps while nothing is registered need the `NotificationReceiver` and
+  `MainActivity` that mob_new 0.6.3 generates, and an app-owned
+  `MobFirebaseService` must add `"presentation": "foreground"` to the JSON it
+  hands mob; see the README. Delivery plumbing (the
   notification-center delegate, push-token forwarding, launch-notification
   handoff) lives in mob CORE — this plugin owns scheduling, cancellation, and
   push registration.
