@@ -1,10 +1,8 @@
 %{
   name: :mob_notify,
-  # Matches the actual mob dep in mix.exs. The old "~> 0.6" pin here
-  # never matched — mix.exs pulls mob 0.7.x, so the manifest gate would
-  # have refused the plugin outright once the host ran a manifest
-  # validation pass (MOB-81).
-  mob_version: "~> 0.7",
+  # Matches the mob dep in mix.exs (MOB-81): 0.9.8 delivers the
+  # `{:notification, map}` envelope this plugin documents (MOB-315).
+  mob_version: "~> 0.9.8",
   plugin_spec_version: 1,
   description:
     "Local + push notifications (device half) — extracted from mob core in Wave 2. " <>

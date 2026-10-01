@@ -16,6 +16,9 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versioning: [S
   `id`, `title`, `body`, `data`; which process receives it; and that the tap
   that cold-launches the app arrives once. AGENTS.md no longer says Android
   delivery runs through `MobFirebaseService`, which no generated app ships.
+- **Requires mob `~> 0.9.8`**, the release that delivers that shape on both
+  platforms. On older mob, iOS sends the same unlabelled map for an arrival
+  and a tap, and Android drops taps for a registered screen.
 
 ## [0.1.3] - 2026-09-30
 
