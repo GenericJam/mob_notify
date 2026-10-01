@@ -6,6 +6,17 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versioning: [S
 
 ---
 
+## [Unreleased]
+
+### Changed
+
+- **Docs: the delivered `{:notification, notif}` shape** (MOB-315, MOB-316,
+  MOB-178). The moduledoc, README and AGENTS.md describe mob's
+  `Mob.Notification` map: `presentation: :foreground | :tap`, `action`, `source`,
+  `id`, `title`, `body`, `data`; which process receives it; and that the tap
+  that cold-launches the app arrives once. AGENTS.md no longer says Android
+  delivery runs through `MobFirebaseService`, which no generated app ships.
+
 ## [0.1.3] - 2026-09-30
 
 ### Added

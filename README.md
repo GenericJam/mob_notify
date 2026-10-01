@@ -35,7 +35,7 @@ MobNotify.schedule(socket,
 
 MobNotify.cancel(socket, "reminder_1")
 
-def handle_info({:notification, %{id: id, data: data, source: :local}}, socket), do: ...
+def handle_info({:notification, %{presentation: :tap, id: id, data: data, source: :local}}, socket), do: ...
 ```
 
 Push registration (call once after `:notifications` is granted):
@@ -47,12 +47,35 @@ def handle_info({:push_token, platform, token}, socket) do
   # platform is :ios | :android — store both, send with MobPush.send/3 server-side
 end
 
-def handle_info({:notification, %{title: t, body: b, data: d, source: :push}}, socket), do: ...
+def handle_info({:notification, %{presentation: :tap, title: t, body: b, data: d, source: :push}}, socket), do: ...
 ```
 
-Notifications arrive via `handle_info` regardless of app state — foreground,
-background, or relaunched after being killed. Delivery plumbing lives in mob
-core; this plugin is the API surface.
+### What arrives
+
+Delivery lives in mob core; this plugin is the API surface. Every
+notification arrives as `{:notification, notif}` (mob > 0.9.7; see
+[`Mob.Notification`](https://hexdocs.pm/mob/Mob.Notification.html)):
+
+```elixir
+%{
+  presentation: :tap,          # :foreground = arrived while the app was open
+  action: "default",           # nil for :foreground
+  source: :local,              # or :push
+  id: "reminder_1",
+  title: "Time to check in",
+  body: "Open the app to see today's updates",
+  data: %{screen: "reminders"} # atom keys at the top level
+}
+```
+
+A `:foreground` arrival still shows the system banner; tapping it then
+delivers `:tap`. A tap that launched the app from a killed state arrives at
+the root screen once it has mounted, exactly once.
+
+It goes to the process that last called `register_push/1` (on iOS, also
+`schedule/2`) while that process is alive, otherwise to the screen currently
+showing. On Android, a push the system tray shows for FCM on its own carries
+no mob payload and does not arrive.
 
 ## Host app requirements
 
