@@ -21,7 +21,8 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versioning: [S
     token as `{:push_token, :android, token}`, and `mob_wake_id` messages and
     tokens to mob_wake.
   - A tap on a push the system tray showed arrives as one
-    `{:notification, %{presentation: :tap}}` on cold and warm launch, with the
+    `{:notification, %{presentation: :tap}}` on cold and warm launch, and
+    when the app is already open and the user taps it in the shade, with the
     FCM message id and the message's data keys, from any sender.
   - The plugin manifest declares the service and the boot re-arm receiver
     through `android.manifest_application_snippets` (mob_dev >= 0.6.19), so
@@ -30,7 +31,27 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versioning: [S
     Delete it to switch.
 - Host tests compile `MobNotifyBridge.kt` with `kotlinc` against
   `android.jar` and decode its envelopes with `Mob.Notification.decode/1`
-  (tag `:kotlin_host`, excluded when the toolchain is missing).
+  (tag `:kotlin_host`). Locally they are excluded when the toolchain is
+  missing; CI fetches org.json and requires them.
+
+### Changed
+
+Behaviour an existing Android app sees after upgrading (hence 0.2.0):
+
+- **The host manifest gains two components** at every native build: the
+  `io.mob.notify.MobFirebaseService` `<service>` and the
+  `io.mob.notify.MobNotifyBootReceiver` `<receiver>`. Splicing them needs the
+  host's mob_dev >= 0.6.19; an older mob_dev ignores
+  `manifest_application_snippets`, and the app then receives no FCM through
+  mob_notify and loses scheduled notifications on reboot unless it declares
+  both itself.
+- **mob_notify posts its own banners**: a push with a `notification` block
+  that arrives while the app is open is shown through mob_notify's channel
+  (or the sender's `channel_id` when the app created it).
+- **`:foreground` and `:tap` arrive for messages from any FCM sender**, not
+  only mob_push: the Firebase console, another backend, or a library that
+  shares the app's Firebase project. Screens that match only on
+  `{:notification, _}` now see those too.
 
 ## [0.1.4] - 2026-10-01
 

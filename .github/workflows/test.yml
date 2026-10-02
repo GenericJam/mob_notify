@@ -2,9 +2,10 @@ name: tests
 
 # CI for the plugin's host-side Elixir surface — the same gate mob core runs,
 # so a PR gets a green check instead of relying only on each contributor's
-# local pre-push hook. Native code (zig/ObjC/Kotlin) is compiled by the host
-# app at deploy time, not here; the FFI-seam invariants are guarded by
-# source-level tests (see test/mob_camera_test.exs).
+# local pre-push hook. Native code (zig/ObjC) is compiled by the host app at
+# deploy time, not here. The Kotlin bridge is compiled and its envelope
+# builder run by the :kotlin_host tests (kotlinc and the Android SDK come with
+# the runner image; org.json is fetched below).
 
 on:
   push:
@@ -55,5 +56,15 @@ jobs:
       - name: Credo (strict)
         run: mix credo --strict
 
+      - name: org.json for the :kotlin_host tests
+        run: |
+          curl -fsSL -o "$RUNNER_TEMP/json-20231013.jar" \
+            https://repo1.maven.org/maven2/org/json/json/20231013/json-20231013.jar
+          echo "MOB_NOTIFY_ORG_JSON_JAR=$RUNNER_TEMP/json-20231013.jar" >> "$GITHUB_ENV"
+
       - name: Tests
+        env:
+          # Fail instead of silently excluding :kotlin_host when the toolchain
+          # is missing.
+          MOB_NOTIFY_REQUIRE_KOTLIN_HOST: "1"
         run: mix test --exclude macos_only --exclude requires_zig

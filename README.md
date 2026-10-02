@@ -82,7 +82,8 @@ native build time; the app needs no Kotlin of its own:
 
 - **Tap on a push the system tray showed** (a message with a
   `notification` block, sent while the app was in the background or killed):
-  one `:tap`, on cold launch or warm. `id` is the FCM message id and `data`
+  one `:tap`, on cold launch, warm launch, or from the shade while the app is
+  open again. `id` is the FCM message id and `data`
   the message's data keys (FCM's own `google.*`, `from` and `collapse_key`
   are dropped); `title` and `body` are `nil`, because Android doesn't pass
   the displayed text to the app. A push from mob_push carries
