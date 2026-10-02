@@ -34,8 +34,7 @@
       "android.permission.SCHEDULE_EXACT_ALARM",
       # Boot re-arm. AlarmManager alarms are wiped on reboot; MobNotifyBootReceiver
       # re-arms persisted schedules on ACTION_BOOT_COMPLETED, which requires this
-      # permission. The <receiver> itself can't be contributed by a plugin manifest
-      # (see host_requirements).
+      # permission. The <receiver> is declared by manifest_application_snippets.
       "android.permission.RECEIVE_BOOT_COMPLETED"
     ],
     gradle_deps: [
@@ -43,6 +42,33 @@
       # host-level (see host_requirements) — a plugin manifest can't contribute
       # buildscript classpath entries.
       "com.google.firebase:firebase-messaging:24.0.0"
+    ],
+    # Spliced into the host's <application> by mob_dev's native build (mob_dev
+    # >= 0.6.19; skipped when the host already declares the same android:name).
+    # Both classes ship in bridge_kt.
+    manifest_application_snippets: [
+      # FCM receipt (MOB-327): token refresh, foreground arrivals, mob_wake
+      # forwarding. Priority -1: Android hands FCM to one service, and an app
+      # that declares its own MESSAGING_EVENT service (priority 0) keeps it;
+      # firebase-messaging's own fallback service sits at -500.
+      """
+      <service android:name="io.mob.notify.MobFirebaseService"
+          android:exported="false">
+          <intent-filter android:priority="-1">
+              <action android:name="com.google.firebase.MESSAGING_EVENT" />
+          </intent-filter>
+      </service>
+      """,
+      # Boot re-arm of scheduled notifications. exported: BOOT_COMPLETED comes
+      # from the system.
+      """
+      <receiver android:name="io.mob.notify.MobNotifyBootReceiver"
+          android:exported="true">
+          <intent-filter>
+              <action android:name="android.intent.action.BOOT_COMPLETED" />
+          </intent-filter>
+      </receiver>
+      """
     ]
   },
   ios: %{
@@ -51,14 +77,11 @@
   },
   # Manual host-app steps the build can't automate; printed as a warning on
   # every `mix mob.deploy --native` of the host. mob_new-generated apps satisfy
-  # the template-level ones (the silent-APNs background mode needs
-  # mob_new >= 0.6.1); the Apple Developer Portal step is always manual.
+  # the NotificationReceiver and AppDelegate ones (the silent-APNs background
+  # mode needs mob_new >= 0.6.1). The Firebase wiring (google-services plugin +
+  # json, per Firebase project) and the Apple Developer Portal step are always
+  # manual.
   host_requirements: [
-    "Android: AndroidManifest.xml must declare the FCM service inside <application>: " <>
-      ~s(<service android:name=".MobFirebaseService" android:exported="false"> ) <>
-      ~s(<intent-filter><action android:name="com.google.firebase.MESSAGING_EVENT" /></intent-filter></service>) <>
-      " — the MobFirebaseService.kt class ships in the host app (mob_new template), " <>
-      "not in this plugin (FirebaseMessagingService subclasses must live in the host package).",
     "Android: the host build.gradle needs the com.google.gms.google-services plugin " <>
       "+ a google-services.json (Firebase console) — buildscript classpath entries " <>
       "are host-level, a plugin manifest can't contribute them.",
@@ -79,12 +102,6 @@
       "surface — the mob_new AppDelegate template NSLogs it).",
     "Android: scheduled notifications display via a <applicationId>.NotificationReceiver " <>
       "BroadcastReceiver declared in AndroidManifest (the mob_new template ships it) — " <>
-      "display/tap delivery stays host-side; this plugin only arms the alarm.",
-    "Android: AndroidManifest.xml must declare the boot re-arm receiver inside <application>: " <>
-      ~s(<receiver android:name="io.mob.notify.MobNotifyBootReceiver" android:exported="true">) <>
-      ~s(<intent-filter><action android:name="android.intent.action.BOOT_COMPLETED" /></intent-filter></receiver>) <>
-      " — AlarmManager alarms are wiped on reboot; this receiver re-arms persisted " <>
-      "schedules on boot. A plugin manifest can't contribute a <receiver> fragment " <>
-      "(same limitation as mob_screencast's foreground <service>), so the host must add it."
+      "display/tap delivery stays host-side; this plugin only arms the alarm."
   ]
 }

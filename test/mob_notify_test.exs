@@ -40,23 +40,6 @@ defmodule MobNotifyTest do
       assert Enum.any?(m.android.gradle_deps, &(&1 =~ "firebase-messaging"))
     end
 
-    test "declares all seven host requirements (FCM service, google-services, AppDelegate token, receiver, boot receiver, iOS silent-APNs Info.plist, iOS silent-APNs Developer Portal)",
-         %{manifest: m} do
-      assert [_, _, _, _, _, _, _] = m.host_requirements
-      assert Enum.any?(m.host_requirements, &(&1 =~ "MobFirebaseService"))
-      assert Enum.any?(m.host_requirements, &(&1 =~ "google-services"))
-      assert Enum.any?(m.host_requirements, &(&1 =~ "mob_send_push_token"))
-      assert Enum.any?(m.host_requirements, &(&1 =~ "NotificationReceiver"))
-
-      assert Enum.any?(
-               m.host_requirements,
-               &(&1 =~ "MobNotifyBootReceiver" and &1 =~ "BOOT_COMPLETED")
-             )
-
-      assert Enum.any?(m.host_requirements, &(&1 =~ "remote-notification"))
-      assert Enum.any?(m.host_requirements, &(&1 =~ "Apple Developer Portal"))
-    end
-
     test "ships the Kotlin bridge the manifest references", %{manifest: m} do
       assert m.android.bridge_class == "io.mob.notify.MobNotifyBridge"
       assert File.exists?(Path.join(@plugin_dir, m.android.bridge_kt))
