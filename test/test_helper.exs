@@ -69,6 +69,11 @@ case MobNotify.KotlinHost.toolchain() do
     ExUnit.start()
 
   {:error, reason} ->
+    # CI sets this so the Kotlin coverage can't silently disappear.
+    if System.get_env("MOB_NOTIFY_REQUIRE_KOTLIN_HOST") in ["1", "true"] do
+      raise "MOB_NOTIFY_REQUIRE_KOTLIN_HOST is set but :kotlin_host can't run: #{reason}"
+    end
+
     IO.puts("Excluding :kotlin_host tests: #{reason}")
     ExUnit.start(exclude: [:kotlin_host])
 end

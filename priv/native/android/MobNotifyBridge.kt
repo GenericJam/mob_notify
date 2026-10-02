@@ -48,6 +48,7 @@ import android.content.Context
 import android.content.Intent
 import android.os.Build
 import android.os.Bundle
+import androidx.core.app.OnNewIntentProvider
 import com.google.firebase.messaging.FirebaseMessagingService
 import com.google.firebase.messaging.RemoteMessage
 import io.mob.plugin.MobNotifyHub
@@ -75,6 +76,7 @@ object MobNotifyBridge : io.mob.plugin.MobActivityAware {
     override fun setActivity(activity: Activity) {
         activityRef = WeakReference(activity)
         MobNotifyFcm.attach(activity.application)
+        MobNotifyFcm.watchNewIntents(activity)
     }
 
     // Parse the opts JSON and delegate to MobNotifySchedules.schedule, which
@@ -372,15 +374,21 @@ object MobFcmEnvelope {
 }
 
 // The Android half: tracks whether the app is in the foreground, delivers
-// tray taps from the resumed activity's intent, and shows the banner for a
-// push that arrives in the foreground. attach() runs from the first
-// MainActivity.onCreate (MobNotifyBridge.setActivity), before its onResume.
+// tray taps from the activity's intent (on resume, and on onNewIntent for a
+// tap while the activity is already resumed), and shows the banner for a
+// push that arrives in the foreground. attach() and watchNewIntents() run
+// from MainActivity.onCreate (MobNotifyBridge.setActivity), before its
+// onResume.
 object MobNotifyFcm : Application.ActivityLifecycleCallbacks {
     private const val PREFS = "mob_notify_fcm"
     private const val TAPPED = "tapped_message_ids"
     private const val TAPPED_MAX = 32
 
     private val attached = AtomicBoolean(false)
+
+    // Activities whose onNewIntent is already watched (weak: an activity is
+    // dropped with its instance).
+    private val watched = java.util.Collections.newSetFromMap(java.util.WeakHashMap<Activity, Boolean>())
 
     // Activities between onResume and onPause (main thread only).
     @Volatile private var resumed = 0
@@ -389,6 +397,17 @@ object MobNotifyFcm : Application.ActivityLifecycleCallbacks {
 
     fun attach(app: Application) {
         if (attached.compareAndSet(false, true)) app.registerActivityLifecycleCallbacks(this)
+    }
+
+    // A tray tap while the activity is already resumed (the user reopened the
+    // app, then tapped the notification in the shade) reaches onNewIntent with
+    // no onPause/onResume around it, so the resume check never sees it. Once
+    // per activity instance; the persisted ids keep the later resume, which
+    // sees the same intent through setIntent, from delivering it again.
+    fun watchNewIntents(activity: Activity) {
+        val provider = activity as? OnNewIntentProvider ?: return
+        synchronized(watched) { if (!watched.add(activity)) return }
+        provider.addOnNewIntentListener { intent -> deliverTap(activity, intent) }
     }
 
     override fun onActivityResumed(activity: Activity) {
