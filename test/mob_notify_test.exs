@@ -70,7 +70,7 @@ defmodule MobNotifyTest do
     # inexact alarm. The guard lives in the shared MobNotifySchedules object
     # (used by both the bridge and the boot receiver), declared in the same
     # bridge_kt file. Source-level because JNI/AlarmManager isn't exercisable
-    # from mix test (see CLAUDE.md).
+    # from mix test (see AGENTS.md).
     setup do
       {:ok, m} = Manifest.load(@plugin_dir)
       %{src: File.read!(Path.join(@plugin_dir, m.android.bridge_kt))}

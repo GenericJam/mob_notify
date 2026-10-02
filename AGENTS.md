@@ -1,8 +1,8 @@
-# AGENTS.md — orientation for AI agents working on mob_notify
+# mob_notify — Agent Instructions
 
 You're in **mob_notify**, a Mob plugin: the device-side surface for local notifications and push registration. Extracted from mob core's `Mob.Notify` in Wave 2. The API is `MobNotify.{schedule, cancel, register_push}/1`. Delivery of `{:notification, ...}` and `{:push_token, ...}` messages is core behaviour — this plugin owns scheduling, cancellation, and push registration only.
 
-**Also read [`~/code/mob/AGENTS.md`](../mob/AGENTS.md)** for the system view — mob's three-repo topology, plugin manifest schema, `Mob.Composite` / `Mob.Sigil`, how to drive a running app, and the cross-cutting pre-empt-failure rules. This file is mob_notify-specific.
+**Also read [`~/code/mob/AGENTS.md`](../mob/AGENTS.md)** for the system view — mob's three-repo topology, plugin manifest schema, `Mob.Composite` / `Mob.Sigil`, how to drive a running app, and the cross-cutting pre-empt-failure rules. See [`~/code/mob/MOB_PLUGINS.md`](../mob/MOB_PLUGINS.md) for the manifest schema. This file is mob_notify-specific.
 
 > **Keep this file current.** When you change delivery behaviour, add a `host_requirements` entry, or hit a gotcha that would trip the next agent, fix it here in the same commit — not in a follow-up.
 
@@ -61,15 +61,21 @@ Native changes (.m / .zig / .kt) aren't exercised by `mix test`. Deploy against 
 3. **Boot re-arm needs `MobNotifyBootReceiver` in the host manifest.** AlarmManager alarms are wiped on reboot; the receiver in `io.mob.notify.MobNotifyBootReceiver` re-arms persisted schedules on `ACTION_BOOT_COMPLETED`. A plugin manifest can't contribute a `<receiver>` fragment, so it lives in `host_requirements` — mob_new template ships it.
 4. **Push token forwarding is host-side.** The iOS AppDelegate must call `mob_send_push_token(hex)` from `didRegisterForRemoteNotificationsWithDeviceToken:`; without it, no `{:push_token, ...}` message ever arrives. Same story for `didFailToRegisterForRemoteNotificationsWithError:` — the template NSLogs it, and that's often the only signal when APNs registration silently fails.
 
-## Pre-commit + release
+## Pre-commit checklist
+
+Same gate as mob core:
 
 ```bash
 mix format
-mix credo --strict
+mix credo --strict       # includes ExSlop + jump_credo_checks
 mix compile --warnings-as-errors
 mix test
 ```
 
-Pre-push hook (`.githooks/pre-push`, `git config core.hooksPath .githooks` once per clone) runs format + credo + compile on every push and the full suite when `mix.exs` changes.
+Native changes (`.m` / `.zig` / `.kt`) aren't exercised by `mix test` — they need a `mix mob.deploy --native` of a host app (mob_plugin_demo) and a device check before committing (see Testing).
 
-`mix.exs` version bump on master triggers `.github/workflows/release.yml` (tag + GitHub Release + Hex publish, with the manifest signed against `priv/mob_plugin.pub`). Do NOT bump versions without explicit permission — see `~/code/mob/RELEASE.md`.
+Pre-push hook (`.githooks/pre-push`, `git config core.hooksPath .githooks` once per clone) runs format + credo + compile on every push and the full suite when `mix.exs` changes (release preflight).
+
+## Release flow
+
+`mix.exs` version bump on master triggers `.github/workflows/release.yml` (tag + GitHub Release + Hex publish, with the manifest signed against `priv/mob_plugin.pub`). Do NOT bump versions without explicit permission — see `~/code/mob/RELEASE.md` for the trigger model.
