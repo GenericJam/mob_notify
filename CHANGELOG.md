@@ -6,6 +6,32 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versioning: [S
 
 ---
 
+## [Unreleased]
+
+### Added
+
+- **Android FCM receipt ships in the plugin** (MOB-327). The docs said the
+  app's `MobFirebaseService` came from the mob_new template, which stopped
+  generating it after 0.4.10, so a newer app received no foreground pushes
+  and no token refreshes, and a tap on a push the system tray showed reached
+  mob only when mob_push had added `mob_notification_json`. Now:
+  - `io.mob.notify.MobFirebaseService` hands a push arriving in the
+    foreground to mob as `{:notification, %{presentation: :foreground}}`
+    (plus the banner Android doesn't show for a foreground app), a refreshed
+    token as `{:push_token, :android, token}`, and `mob_wake_id` messages and
+    tokens to mob_wake.
+  - A tap on a push the system tray showed arrives as one
+    `{:notification, %{presentation: :tap}}` on cold and warm launch, with the
+    FCM message id and the message's data keys, from any sender.
+  - The plugin manifest declares the service and the boot re-arm receiver
+    through `android.manifest_application_snippets` (mob_dev >= 0.6.19), so
+    they leave `host_requirements`. The service's intent filter has priority
+    -1: an app that declares its own `FirebaseMessagingService` keeps it.
+    Delete it to switch.
+- Host tests compile `MobNotifyBridge.kt` with `kotlinc` against
+  `android.jar` and decode its envelopes with `Mob.Notification.decode/1`
+  (tag `:kotlin_host`, excluded when the toolchain is missing).
+
 ## [0.1.4] - 2026-10-01
 
 ### Changed

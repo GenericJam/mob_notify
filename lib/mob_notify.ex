@@ -17,13 +17,13 @@ defmodule MobNotify do
   which arrives once, at the root screen after it mounts. It goes to the process
   that last called `register_push/1` (on iOS, also `schedule/2`) while it is
   alive, otherwise to the screen showing. On Android, `:foreground` arrivals
-  and taps while nothing is registered need the `NotificationReceiver` and
-  `MainActivity` that mob_new 0.6.3 generates, and an app-owned
-  `MobFirebaseService` must add `"presentation": "foreground"` to the JSON it
-  hands mob; see the README. Delivery plumbing (the
-  notification-center delegate, push-token forwarding, launch-notification
-  handoff) lives in mob CORE — this plugin owns scheduling, cancellation, and
-  push registration.
+  of local notifications and taps while nothing is registered need the
+  `NotificationReceiver` and `MainActivity` that mob_new 0.6.3 generates.
+  Pushes arrive through the plugin's own `MobFirebaseService` and tray-tap
+  handling, unless the app declares its own `FirebaseMessagingService`; see
+  the README. Local-notification delivery plumbing (the iOS
+  notification-center delegate, APNs token forwarding, launch-notification
+  handoff) lives in mob CORE and the host templates.
 
   ## Which plugin do I actually want?
 
