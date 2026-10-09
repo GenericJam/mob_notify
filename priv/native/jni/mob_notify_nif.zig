@@ -36,6 +36,7 @@ const NotifyMethods = struct {
     notify_schedule: jni.JMethodID = null,
     notify_cancel: jni.JMethodID = null,
     notify_register_push: jni.JMethodID = null,
+    notify_permission_status: jni.JMethodID = null,
 };
 
 var g_notify: NotifyMethods = .{};
@@ -45,9 +46,19 @@ var g_notify_cls: jni.JClass = null;
 export fn Java_io_mob_notify_MobNotifyBridge_nativeRegister(jenv: *jni.JNIEnv, cls: jni.JClass) callconv(.c) void {
     g_notify_cls = jni.newGlobalRef(jenv, cls);
     if (g_notify_cls == null) return;
-    g_notify.notify_schedule = jni.getStaticMethodID(jenv, cls, "notify_schedule", "(JLjava/lang/String;)V");
-    g_notify.notify_cancel = jni.getStaticMethodID(jenv, cls, "notify_cancel", "(Ljava/lang/String;)V");
-    g_notify.notify_register_push = jni.getStaticMethodID(jenv, cls, "notify_register_push", "(J)V");
+    g_notify.notify_schedule = lookupStatic(jenv, cls, "notify_schedule", "(JLjava/lang/String;)V");
+    g_notify.notify_cancel = lookupStatic(jenv, cls, "notify_cancel", "(Ljava/lang/String;)V");
+    g_notify.notify_register_push = lookupStatic(jenv, cls, "notify_register_push", "(J)V");
+    g_notify.notify_permission_status = lookupStatic(jenv, cls, "notify_permission_status", "()I");
+}
+
+/// A failed GetStaticMethodID leaves NoSuchMethodError pending, which would make
+/// the next lookup a JNI misuse and throw out of register() at bootstrap. Clear
+/// it and keep the id null, so the NIF answers {error, bridge_not_registered}.
+fn lookupStatic(jenv: *jni.JNIEnv, cls: jni.JClass, name: [*:0]const u8, sig: [*:0]const u8) jni.JMethodID {
+    const id = jni.getStaticMethodID(jenv, cls, name, sig);
+    if (id == null) jni.exceptionClear(jenv);
+    return id;
 }
 
 // ── Thread-attach + pid round-trip helpers (mirror mob-core / camera) ─────
@@ -72,12 +83,25 @@ inline fn pidFromLong(jpid: jni.JLong) erts.ErlNifPid {
     return .{ .pid = low };
 }
 
-/// Call `MobNotifyBridge.<method>(pid_long, arg)` — async. Returns :ok.
+/// {error, bridge_not_registered}: nativeRegister never ran (MobPluginBootstrap
+/// did not call register()) or a method-ID lookup failed. Calling into JNI with
+/// a null class or method id would abort the VM instead. The public API ignores
+/// the return value; MobNotify.SelfTest turns it into a failure (MOB-418).
+fn bridgeNotRegistered(env: ?*erts.ErlNifEnv) erts.ERL_NIF_TERM {
+    return erts.makeTuple(env, .{ erts.atom(env, "error"), erts.atom(env, "bridge_not_registered") });
+}
+
+/// Call `MobNotifyBridge.<method>(pid_long, arg)` — async. Returns :ok, or
+/// {error, bridge_not_registered}.
 fn callBridgePidStr(env: ?*erts.ErlNifEnv, method: jni.JMethodID, pid: erts.ErlNifPid, arg: ?[*:0]const u8) erts.ERL_NIF_TERM {
+    if (g_notify_cls == null or method == null) return bridgeNotRegistered(env);
     var attached: c_int = 0;
     const jenv = get_jenv(&attached) orelse return erts.atom(env, "error");
     const jarg: jni.JString = if (arg) |a| jni.newStringUTF(jenv, a) else null;
     jenv.*.CallStaticVoidMethod.?(jenv, g_notify_cls, method, pidToJlong(pid), jarg);
+    // A throwable escaping Kotlin must not stay pending on an already-attached
+    // scheduler thread (the next JNI call there would be illegal).
+    jni.exceptionClear(jenv);
     if (jarg != null) jni.deleteLocalRef(jenv, jarg);
     detachIfAttached(attached);
     return erts.ok(env);
@@ -164,10 +188,12 @@ fn nif_notify_cancel(env: ?*erts.ErlNifEnv, argc: c_int, argv: [*]const erts.ERL
     if (bin.size + 1 > buf.len) return erts.badarg(env);
     @memcpy(buf[0..bin.size], bin.data[0..bin.size]);
 
+    if (g_notify_cls == null or g_notify.notify_cancel == null) return bridgeNotRegistered(env);
     var attached: c_int = 0;
     const jenv = get_jenv(&attached) orelse return erts.atom(env, "error");
     const js: jni.JString = jni.newStringUTF(jenv, jni.asCStr(&buf));
     jenv.*.CallStaticVoidMethod.?(jenv, g_notify_cls, g_notify.notify_cancel, js);
+    jni.exceptionClear(jenv);
     if (js != null) jni.deleteLocalRef(jenv, js);
     detachIfAttached(attached);
     return erts.ok(env);
@@ -178,13 +204,43 @@ fn nif_notify_cancel(env: ?*erts.ErlNifEnv, argc: c_int, argv: [*]const erts.ERL
 fn nif_notify_register_push(env: ?*erts.ErlNifEnv, argc: c_int, argv: [*]const erts.ERL_NIF_TERM) callconv(.c) erts.ERL_NIF_TERM {
     _ = argc;
     _ = argv;
+    if (g_notify_cls == null or g_notify.notify_register_push == null) return bridgeNotRegistered(env);
     var pid: erts.ErlNifPid = undefined;
     _ = erts.enif_self(env, &pid);
     var attached: c_int = 0;
     const jenv = get_jenv(&attached) orelse return erts.atom(env, "error");
     jenv.*.CallStaticVoidMethod.?(jenv, g_notify_cls, g_notify.notify_register_push, pidToJlong(pid));
+    jni.exceptionClear(jenv);
     detachIfAttached(attached);
     return erts.ok(env);
+}
+
+// Read-only: are this app's notifications enabled? Kotlin answers from
+// NotificationManager.areNotificationsEnabled() (posts nothing, prompts
+// nothing): 10 = authorized, 11 = denied (switched off, or POST_NOTIFICATIONS
+// not granted on 13+), 12 = the bootstrap never handed the bridge an Activity,
+// 13 = the query threw. The codes start at 10 because a Java throwable escaping
+// the method makes CallStaticIntMethod return 0: anything outside 10..12 is
+// {error, query_failed}, never a status. MobNotify.SelfTest's proof that the
+// NIF, the registered bridge and the Activity hand-off schedule/cancel need
+// are all in place.
+fn nif_notify_permission_status(env: ?*erts.ErlNifEnv, argc: c_int, argv: [*]const erts.ERL_NIF_TERM) callconv(.c) erts.ERL_NIF_TERM {
+    _ = argc;
+    _ = argv;
+    if (g_notify_cls == null or g_notify.notify_permission_status == null) return bridgeNotRegistered(env);
+    var attached: c_int = 0;
+    const jenv = get_jenv(&attached) orelse return erts.atom(env, "error");
+    const code = jenv.*.CallStaticIntMethod.?(jenv, g_notify_cls, g_notify.notify_permission_status);
+    // Clearing with nothing pending is a no-op; an escaped throwable must not
+    // stay pending on this (possibly already attached) scheduler thread.
+    jni.exceptionClear(jenv);
+    detachIfAttached(attached);
+    return switch (code) {
+        10 => erts.makeTuple(env, .{ erts.atom(env, "ok"), erts.atom(env, "authorized") }),
+        11 => erts.makeTuple(env, .{ erts.atom(env, "ok"), erts.atom(env, "denied") }),
+        12 => erts.makeTuple(env, .{ erts.atom(env, "error"), erts.atom(env, "no_activity") }),
+        else => erts.makeTuple(env, .{ erts.atom(env, "error"), erts.atom(env, "query_failed") }),
+    };
 }
 
 // ── NIF table + init entry point ─────────────────────────────────────────
@@ -199,6 +255,7 @@ const nif_funcs = [_]erts.ErlNifFunc{
     .{ .name = "notify_schedule", .arity = 1, .fptr = nif_notify_schedule, .flags = 0 },
     .{ .name = "notify_cancel", .arity = 1, .fptr = nif_notify_cancel, .flags = 0 },
     .{ .name = "notify_register_push", .arity = 0, .fptr = nif_notify_register_push, .flags = 0 },
+    .{ .name = "notify_permission_status", .arity = 0, .fptr = nif_notify_permission_status, .flags = 0 },
 };
 
 var nif_entry: erts.ErlNifEntry = .{

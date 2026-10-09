@@ -1,9 +1,13 @@
 %{
   name: :mob_notify,
-  # Matches the mob dep in mix.exs (MOB-81): 0.9.8 delivers the
-  # `{:notification, map}` envelope this plugin documents (MOB-315).
-  mob_version: "~> 0.9.8",
+  # The mob dep in mix.exs floors at 0.9.15 (Mob.Plugin.SelfTest); 0.9.8 is
+  # what delivers the `{:notification, map}` envelope this plugin documents
+  # (MOB-315).
+  mob_version: "~> 0.9",
   plugin_spec_version: 1,
+  # On-device proof for `mix mob.selftest` / mob_ci: a read-only
+  # notify_permission_status/0 through the NIF (see Mob.Plugin.SelfTest).
+  selftest: MobNotify.SelfTest,
   description:
     "Local + push notifications (device half) — extracted from mob core in Wave 2. " <>
       "Pairs with the server-side mob_push package.",

@@ -20,6 +20,7 @@ Device half of the notification story. `MobNotify.schedule/2` and `cancel/2` arm
 ## Anatomy of the plugin
 
 * `lib/mob_notify.ex` — public `MobNotify.{schedule, cancel, register_push, schedule_opts}/1`. Pure Elixir seam over the NIF stubs.
+* `lib/mob_notify/self_test.ex` — `MobNotify.SelfTest` (`Mob.Plugin.SelfTest`, manifest `selftest:`), run by `mix mob.selftest` / mob_ci. It calls the read-only `notify_permission_status/0` NIF (never prompts, never posts); keep it free of anything that shows UI or leaves state. The NIF tables in the `.m` and `.zig` must list exactly the `.erl` stub's exports (a test enforces it).
 * `src/mob_notify_nif.erl` — Erlang NIF stub (tolerant `on_load` so host tests without the NIF don't crash).
 * `priv/mob_plugin.exs` — plugin manifest. Frameworks (`UserNotifications` iOS), permissions (`POST_NOTIFICATIONS`, `SCHEDULE_EXACT_ALARM`, `RECEIVE_BOOT_COMPLETED` Android), gradle deps (`firebase-messaging`), `manifest_application_snippets` (the `MobFirebaseService` `<service>` and `MobNotifyBootReceiver` `<receiver>`, spliced into the host manifest by mob_dev >= 0.6.19, skipped when the host declares the same name), `host_requirements`. **The `host_requirements` list is load-bearing** — every `mix mob.deploy --native` warns about them; keep it accurate as prerequisites shift.
 * `priv/mob_plugin.pub` — Ed25519 public key. Signature regenerated in CI at publish.

@@ -2,6 +2,7 @@ defmodule MobNotifyTest do
   use ExUnit.Case, async: true
 
   alias MobDev.Plugin.{Manifest, Validator}
+  alias MobNotify.SelfTest
 
   @plugin_dir Path.expand("..", __DIR__)
   @contract Code.eval_file(Path.join(__DIR__, "fixtures/push_contract.exs")) |> elem(0)
@@ -43,6 +44,55 @@ defmodule MobNotifyTest do
     test "ships the Kotlin bridge the manifest references", %{manifest: m} do
       assert m.android.bridge_class == "io.mob.notify.MobNotifyBridge"
       assert File.exists?(Path.join(@plugin_dir, m.android.bridge_kt))
+    end
+
+    test "declares the self-test, which passes the validator without a warning", %{manifest: m} do
+      assert m.selftest == MobNotify.SelfTest
+      assert %{errors: [], warnings: warnings} = Validator.validate_plugin(m, @plugin_dir)
+      refute Enum.any?(warnings, &(&1 =~ "selftest"))
+    end
+  end
+
+  describe "MobNotify.SelfTest" do
+    test "on a host with no native library linked it fails, naming the NIF, instead of raising" do
+      assert {:fail, reason} = result = SelfTest.run(%{platform: :android, device: :emulator})
+      assert reason =~ "mob_notify_nif is not linked"
+      assert reason =~ "nif_not_loaded"
+      assert Mob.Plugin.SelfTest.result?(result)
+    end
+
+    test "any authorization status the platform reports is a pass" do
+      for status <- [:authorized, :denied, :not_determined, :provisional, :ephemeral] do
+        assert :pass = result = SelfTest.classify({:ok, status})
+        assert Mob.Plugin.SelfTest.result?(result)
+      end
+    end
+
+    test "a bridge the bootstrap never registered, or never gave an Activity, fails" do
+      assert {:fail, "Kotlin MobNotifyBridge not registered" <> _} =
+               result = SelfTest.classify({:error, :bridge_not_registered})
+
+      assert Mob.Plugin.SelfTest.result?(result)
+
+      assert {:fail, "MobNotifyBridge has no Activity" <> _} =
+               result = SelfTest.classify({:error, :no_activity})
+
+      assert Mob.Plugin.SelfTest.result?(result)
+    end
+
+    test "a notification center that never answers fails" do
+      assert {:fail, "UNUserNotificationCenter did not answer" <> _} =
+               result = SelfTest.classify({:error, :timeout})
+
+      assert Mob.Plugin.SelfTest.result?(result)
+    end
+
+    test "an unexpected answer fails, quoting it" do
+      for answer <- [:ok, {:ok, :unknown}, {:error, :query_failed}, :error] do
+        assert {:fail, reason} = result = SelfTest.classify(answer)
+        assert reason =~ "notify_permission_status/0 returned #{inspect(answer)}"
+        assert Mob.Plugin.SelfTest.result?(result)
+      end
     end
   end
 
@@ -124,8 +174,68 @@ defmodule MobNotifyTest do
     test "every NIF the public API calls is exported by the stub at the right arity" do
       exports = :mob_notify_nif.module_info(:exports)
 
-      for fa <- [notify_schedule: 1, notify_cancel: 1, notify_register_push: 0] do
+      for fa <- [
+            notify_schedule: 1,
+            notify_cancel: 1,
+            notify_register_push: 0,
+            notify_permission_status: 0
+          ] do
         assert fa in exports, "#{inspect(fa)} missing from mob_notify_nif exports"
+      end
+    end
+
+    # A stub export that a platform's NIF table lacks is nif_not_loaded on that
+    # platform's device: both native tables must register exactly the stub's NIFs.
+    # Guards the native sources, not app code — VacuousTest can't see that.
+    # credo:disable-for-next-line Jump.CredoChecks.VacuousTest
+    test "the iOS and Android NIF tables register exactly the stub's NIFs" do
+      stub =
+        (:mob_notify_nif.module_info(:exports) -- [init: 0, module_info: 0, module_info: 1])
+        |> Enum.sort()
+
+      ios = File.read!(Path.join(@plugin_dir, "priv/native/ios/mob_notify_nif.m"))
+      zig = File.read!(Path.join(@plugin_dir, "priv/native/jni/mob_notify_nif.zig"))
+
+      ios_table =
+        for [_, name, arity] <- Regex.scan(~r/\{"(\w+)",\s*(\d+),\s*nif_\w+,/, ios),
+            do: {String.to_atom(name), String.to_integer(arity)}
+
+      zig_table =
+        for [_, name, arity] <- Regex.scan(~r/\.name = "(\w+)", \.arity = (\d+)/, zig),
+            do: {String.to_atom(name), String.to_integer(arity)}
+
+      assert Enum.sort(ios_table) == stub
+      assert Enum.sort(zig_table) == stub
+    end
+
+    # nativeRegister looks each bridge method up by name + JNI signature; a
+    # mismatch leaves the id null and the NIF answers bridge_not_registered on
+    # device. Every lookup must match a @JvmStatic Kotlin method's types.
+    # Guards the native sources, not app code — VacuousTest can't see that.
+    # credo:disable-for-next-line Jump.CredoChecks.VacuousTest
+    test "every zig method-ID lookup matches a @JvmStatic Kotlin bridge method" do
+      zig = File.read!(Path.join(@plugin_dir, "priv/native/jni/mob_notify_nif.zig"))
+      kt = File.read!(Path.join(@plugin_dir, "priv/native/android/MobNotifyBridge.kt"))
+
+      lookups = Regex.scan(~r/lookupStatic\(jenv, cls, "(\w+)", "\(([^)]*)\)(\w)"\)/, zig)
+      assert [_, _, _, _] = lookups
+
+      jni_type = fn
+        "J" -> "Long"
+        "I" -> "Int"
+        "Ljava/lang/String;" -> "String"
+      end
+
+      for [_, name, args, ret] <- lookups do
+        arg_types = for [t] <- Regex.scan(~r/J|I|L[^;]+;/, args), do: jni_type.(t)
+
+        assert [_, params, kt_ret] =
+                 Regex.run(~r/@JvmStatic\s+fun #{name}\(([^)]*)\)(: \w+|)/, kt),
+               "no @JvmStatic fun #{name} in MobNotifyBridge.kt"
+
+        kt_types = for [_, t] <- Regex.scan(~r/\w+: (\w+)/, params), do: t
+        assert kt_types == arg_types, "#{name}: Kotlin params #{inspect(kt_types)}"
+        assert kt_ret == if(ret == "V", do: "", else: ": " <> jni_type.(ret))
       end
     end
 

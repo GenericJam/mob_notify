@@ -109,6 +109,25 @@ object MobNotifyBridge : io.mob.plugin.MobActivityAware {
         MobNotifySchedules.cancel(activity, id)
     }
 
+    // Read-only notification authorization for MobNotify.SelfTest (MOB-418):
+    // posts nothing, prompts nothing. 10 = enabled, 11 = disabled (switched
+    // off, or POST_NOTIFICATIONS not granted on 13+), 12 = no Activity yet (the
+    // bootstrap never called setActivity, so schedule/cancel would silently do
+    // nothing), 13 = the query threw. Codes start at 10 so the 0 JNI returns
+    // when a throwable escapes can't read as a status; the zig NIF maps them to
+    // atoms. areNotificationsEnabled is API 24; mob hosts are minSdk 28.
+    @JvmStatic
+    fun notify_permission_status(): Int {
+        val activity = activityRef?.get() ?: return 12
+        return try {
+            val nm = activity.getSystemService(NotificationManager::class.java)
+            if (nm.areNotificationsEnabled()) 10 else 11
+        } catch (e: Throwable) {
+            android.util.Log.e("MobNotify", "notify_permission_status failed: ${e.message}")
+            13
+        }
+    }
+
     // Registers the delivery target (the hub pid the host delivery paths key
     // on) and resolves the FCM token: a refresh that arrived while no screen
     // was registered is drained first; otherwise fetch fresh.
