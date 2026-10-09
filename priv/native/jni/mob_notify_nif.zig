@@ -46,10 +46,19 @@ var g_notify_cls: jni.JClass = null;
 export fn Java_io_mob_notify_MobNotifyBridge_nativeRegister(jenv: *jni.JNIEnv, cls: jni.JClass) callconv(.c) void {
     g_notify_cls = jni.newGlobalRef(jenv, cls);
     if (g_notify_cls == null) return;
-    g_notify.notify_schedule = jni.getStaticMethodID(jenv, cls, "notify_schedule", "(JLjava/lang/String;)V");
-    g_notify.notify_cancel = jni.getStaticMethodID(jenv, cls, "notify_cancel", "(Ljava/lang/String;)V");
-    g_notify.notify_register_push = jni.getStaticMethodID(jenv, cls, "notify_register_push", "(J)V");
-    g_notify.notify_permission_status = jni.getStaticMethodID(jenv, cls, "notify_permission_status", "()I");
+    g_notify.notify_schedule = lookupStatic(jenv, cls, "notify_schedule", "(JLjava/lang/String;)V");
+    g_notify.notify_cancel = lookupStatic(jenv, cls, "notify_cancel", "(Ljava/lang/String;)V");
+    g_notify.notify_register_push = lookupStatic(jenv, cls, "notify_register_push", "(J)V");
+    g_notify.notify_permission_status = lookupStatic(jenv, cls, "notify_permission_status", "()I");
+}
+
+/// A failed GetStaticMethodID leaves NoSuchMethodError pending, which would make
+/// the next lookup a JNI misuse and throw out of register() at bootstrap. Clear
+/// it and keep the id null, so the NIF answers {error, bridge_not_registered}.
+fn lookupStatic(jenv: *jni.JNIEnv, cls: jni.JClass, name: [*:0]const u8, sig: [*:0]const u8) jni.JMethodID {
+    const id = jni.getStaticMethodID(jenv, cls, name, sig);
+    if (id == null) jni.exceptionClear(jenv);
+    return id;
 }
 
 // ── Thread-attach + pid round-trip helpers (mirror mob-core / camera) ─────
@@ -203,10 +212,13 @@ fn nif_notify_register_push(env: ?*erts.ErlNifEnv, argc: c_int, argv: [*]const e
 
 // Read-only: are this app's notifications enabled? Kotlin answers from
 // NotificationManager.areNotificationsEnabled() (posts nothing, prompts
-// nothing): 1 = authorized, 0 = denied (switched off, or POST_NOTIFICATIONS not
-// granted on 13+), 2 = the bootstrap never handed the bridge an Activity, -1 =
-// the query threw. MobNotify.SelfTest's proof that the NIF, the registered
-// bridge and the Activity hand-off schedule/cancel need are all in place.
+// nothing): 10 = authorized, 11 = denied (switched off, or POST_NOTIFICATIONS
+// not granted on 13+), 12 = the bootstrap never handed the bridge an Activity,
+// 13 = the query threw. The codes start at 10 because a Java throwable escaping
+// the method makes CallStaticIntMethod return 0: anything outside 10..12 is
+// {error, query_failed}, never a status. MobNotify.SelfTest's proof that the
+// NIF, the registered bridge and the Activity hand-off schedule/cancel need
+// are all in place.
 fn nif_notify_permission_status(env: ?*erts.ErlNifEnv, argc: c_int, argv: [*]const erts.ERL_NIF_TERM) callconv(.c) erts.ERL_NIF_TERM {
     _ = argc;
     _ = argv;
@@ -214,11 +226,14 @@ fn nif_notify_permission_status(env: ?*erts.ErlNifEnv, argc: c_int, argv: [*]con
     var attached: c_int = 0;
     const jenv = get_jenv(&attached) orelse return erts.atom(env, "error");
     const code = jenv.*.CallStaticIntMethod.?(jenv, g_notify_cls, g_notify.notify_permission_status);
+    // Clearing with nothing pending is a no-op; an escaped throwable must not
+    // stay pending on this (possibly already attached) scheduler thread.
+    jni.exceptionClear(jenv);
     detachIfAttached(attached);
     return switch (code) {
-        1 => erts.makeTuple(env, .{ erts.atom(env, "ok"), erts.atom(env, "authorized") }),
-        0 => erts.makeTuple(env, .{ erts.atom(env, "ok"), erts.atom(env, "denied") }),
-        2 => erts.makeTuple(env, .{ erts.atom(env, "error"), erts.atom(env, "no_activity") }),
+        10 => erts.makeTuple(env, .{ erts.atom(env, "ok"), erts.atom(env, "authorized") }),
+        11 => erts.makeTuple(env, .{ erts.atom(env, "ok"), erts.atom(env, "denied") }),
+        12 => erts.makeTuple(env, .{ erts.atom(env, "error"), erts.atom(env, "no_activity") }),
         else => erts.makeTuple(env, .{ erts.atom(env, "error"), erts.atom(env, "query_failed") }),
     };
 }

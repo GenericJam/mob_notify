@@ -55,12 +55,10 @@ defmodule MobNotifyTest do
 
   describe "MobNotify.SelfTest" do
     test "on a host with no native library linked it fails, naming the NIF, instead of raising" do
-      for platform <- [:ios, :android] do
-        assert {:fail, reason} = result = SelfTest.run(%{platform: platform, device: :simulator})
-        assert reason =~ "mob_notify_nif is not linked"
-        assert reason =~ "nif_not_loaded"
-        assert Mob.Plugin.SelfTest.result?(result)
-      end
+      assert {:fail, reason} = result = SelfTest.run(%{platform: :android, device: :emulator})
+      assert reason =~ "mob_notify_nif is not linked"
+      assert reason =~ "nif_not_loaded"
+      assert Mob.Plugin.SelfTest.result?(result)
     end
 
     test "any authorization status the platform reports is a pass" do

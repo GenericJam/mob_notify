@@ -16,17 +16,19 @@ defmodule MobNotify.SelfTest do
       jclass and the Activity the bootstrap hands it, so an answer proves the
       zig NIF is linked, `nativeRegister` ran and `setActivity` was called.
 
-  Any `{:ok, status}` is a pass: the status is the user's choice, the answer
-  is the proof. `:denied` and `:not_determined` are not skips, because
+  Any of the statuses above is a pass: the status is the user's choice, the
+  answer is the proof. `:denied` and `:not_determined` are not skips, because
   nothing here needs the permission.
 
   Failures: `{:error, :bridge_not_registered}` (Android: the bootstrap never
   called `MobNotifyBridge.register()`, or a method-ID lookup failed; schedule,
   cancel and register_push answer the same instead of aborting the VM),
   `{:error, :no_activity}` (the bridge has no Activity, so `schedule/2` and
-  `cancel/2` would silently do nothing), `{:error, :timeout}` (iOS: the
-  notification center didn't answer within 2 s), any other answer, and the
-  host stub's `nif_not_loaded` (the NIF is not linked into the build).
+  `cancel/2` would silently do nothing), `{:error, :query_failed}` (Android:
+  the Kotlin query threw), `{:error, :timeout}` (iOS: the notification center
+  didn't answer within 2 s), any other answer (including a status this module
+  doesn't know), the host stub's `nif_not_loaded` (the NIF is not linked into
+  the build) and a missing `:mob_notify_nif` module.
   """
   @behaviour Mob.Plugin.SelfTest
 
@@ -38,6 +40,9 @@ defmodule MobNotify.SelfTest do
   rescue
     e in ErlangError ->
       {:fail, "mob_notify_nif is not linked into this build: #{Exception.message(e)}"}
+
+    e in UndefinedFunctionError ->
+      {:fail, "mob_notify_nif is missing from this build: #{Exception.message(e)}"}
   end
 
   @doc false

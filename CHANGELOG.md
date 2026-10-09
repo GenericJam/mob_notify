@@ -16,8 +16,10 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versioning: [S
   `UNUserNotificationCenter getNotificationSettings`; Android:
   `MobNotifyBridge.notify_permission_status()` →
   `NotificationManager.areNotificationsEnabled()`), which never prompts and
-  posts nothing. Any `{:ok, status}` passes; an unregistered bridge, a bridge
-  with no Activity, an iOS timeout or an unlinked NIF fail. Run it with
+  posts nothing. A known authorization status passes (any of them: the answer
+  is the proof); an unregistered bridge, a bridge with no Activity, a Kotlin
+  query that threw, an iOS timeout, an unknown status or an unlinked NIF fail.
+  Run it with
   `mix mob.selftest` from a host app (mob_dev 0.7.17). Requires mob 0.9.15;
   `mob_version` in the manifest is now `~> 0.9`.
 
@@ -29,7 +31,9 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versioning: [S
   `MobNotifyBridge.register()` never ran or a method-ID lookup failed; they
   now answer `{:error, :bridge_not_registered}`. `MobNotify.schedule/2`,
   `cancel/2` and `register_push/1` are unchanged (they ignore the return
-  value).
+  value). A failed method-ID lookup in `nativeRegister` now clears the
+  pending `NoSuchMethodError` instead of letting it throw out of
+  `register()` at bootstrap.
 
 ## [0.2.0] - 2026-10-02
 
