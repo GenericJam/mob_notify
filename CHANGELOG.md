@@ -6,22 +6,27 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versioning: [S
 
 ---
 
-## [Unreleased]
+## [0.2.1] - 2026-10-09
 
 ### Added
 
 - **On-device self-test** (MOB-418). `MobNotify.SelfTest` implements
   `Mob.Plugin.SelfTest` and is declared in the manifest as `selftest:`. It
-  calls the new read-only NIF `notify_permission_status/0` (iOS:
+  calls a new internal NIF, `:mob_notify_nif.notify_permission_status/0` (iOS:
   `UNUserNotificationCenter getNotificationSettings`; Android:
   `MobNotifyBridge.notify_permission_status()` →
   `NotificationManager.areNotificationsEnabled()`), which never prompts and
   posts nothing. A known authorization status passes (any of them: the answer
   is the proof); an unregistered bridge, a bridge with no Activity, a Kotlin
   query that threw, an iOS timeout, an unknown status or an unlinked NIF fail.
-  Run it with
-  `mix mob.selftest` from a host app (mob_dev 0.7.17). Requires mob 0.9.15;
-  `mob_version` in the manifest is now `~> 0.9`.
+  The NIF is used only by the self-test; `MobNotify`'s public API is
+  unchanged. Run it with `mix mob.selftest` from a host app (mob_dev 0.7.17).
+
+### Changed
+
+- **mob requirement is now `~> 0.9 and >= 0.9.15`** (was `~> 0.9.8`), for
+  `Mob.Plugin.SelfTest`. This raises the floor and also allows mob 0.10+
+  minors. `mob_version` in the manifest is now `~> 0.9` (was `~> 0.9.8`).
 
 ### Fixed
 
@@ -34,6 +39,10 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versioning: [S
   value). A failed method-ID lookup in `nativeRegister` now clears the
   pending `NoSuchMethodError` instead of letting it throw out of
   `register()` at bootstrap.
+- **Android: a throwable from the Kotlin bridge no longer stays pending.**
+  `notify_schedule/1`, `notify_cancel/1` and `notify_register_push/0` clear
+  any exception thrown by `MobNotifyBridge` after the call. Before, it stayed
+  pending on the scheduler thread and the next JNI call there was illegal.
 
 ## [0.2.0] - 2026-10-02
 

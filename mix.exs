@@ -6,7 +6,7 @@ defmodule MobNotify.MixProject do
   def project do
     [
       app: :mob_notify,
-      version: "0.2.0",
+      version: "0.2.1",
       elixir: "~> 1.17",
       deps: deps(),
       aliases: aliases(),
