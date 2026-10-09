@@ -143,6 +143,9 @@ are declared by the native build, mob_dev >= 0.6.19):
   request `:notifications` before scheduling.
 - The wire contract with mob_push is pinned by shared fixtures
   (`test/fixtures/push_contract.exs`, vendored identically in both repos).
+- On-device check: from a host app that activates this plugin, `mix mob.selftest`
+  runs `MobNotify.SelfTest`, which reads the app's notification authorization
+  through the NIF (no prompt, nothing posted) to prove the native side is linked.
 
 ## Development
 

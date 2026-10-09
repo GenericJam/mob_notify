@@ -14,7 +14,8 @@
 -export([
     notify_schedule/1,
     notify_cancel/1,
-    notify_register_push/0
+    notify_register_push/0,
+    notify_permission_status/0
 ]).
 -on_load(init/0).
 
@@ -31,4 +32,10 @@ notify_cancel(_Id) ->
     erlang:nif_error(nif_not_loaded).
 
 notify_register_push() ->
+    erlang:nif_error(nif_not_loaded).
+
+%% Read-only notification authorization, used by MobNotify.SelfTest:
+%% {ok, authorized | denied | not_determined | provisional | ephemeral} or
+%% {error, Reason}. Never prompts, never posts.
+notify_permission_status() ->
     erlang:nif_error(nif_not_loaded).

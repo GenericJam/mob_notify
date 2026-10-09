@@ -106,10 +106,62 @@ static ERL_NIF_TERM nif_notify_register_push(ErlNifEnv *env, int argc,
   return enif_make_atom(env, "ok");
 }
 
+// Read-only: the app's notification authorization, straight from
+// UNUserNotificationCenter. getNotificationSettings never prompts and posts
+// nothing, so MobNotify.SelfTest uses it as the proof the NIF is linked and
+// the notification center answers. Returns {ok, authorized | denied |
+// not_determined | provisional | ephemeral}, or {error, timeout} when the
+// center doesn't answer within 2 s. Dirty (IO) because it blocks on the
+// completion handler, which runs on a UserNotifications queue.
+static ERL_NIF_TERM nif_notify_permission_status(ErlNifEnv *env, int argc,
+                                                 const ERL_NIF_TERM argv[]) {
+  __block UNAuthorizationStatus status = UNAuthorizationStatusNotDetermined;
+  dispatch_semaphore_t done = dispatch_semaphore_create(0);
+  [[UNUserNotificationCenter currentNotificationCenter]
+      getNotificationSettingsWithCompletionHandler:^(
+          UNNotificationSettings *settings) {
+        status = settings.authorizationStatus;
+        dispatch_semaphore_signal(done);
+      }];
+  dispatch_time_t deadline =
+      dispatch_time(DISPATCH_TIME_NOW, (int64_t)(2.0 * NSEC_PER_SEC));
+  // On a timeout status is not read: the handler may still run and write it
+  // later, which is harmless because __block storage outlives us.
+  if (dispatch_semaphore_wait(done, deadline) != 0)
+    return enif_make_tuple2(env, enif_make_atom(env, "error"),
+                            enif_make_atom(env, "timeout"));
+
+  const char *name = "unknown";
+  switch (status) {
+  case UNAuthorizationStatusAuthorized:
+    name = "authorized";
+    break;
+  case UNAuthorizationStatusDenied:
+    name = "denied";
+    break;
+  case UNAuthorizationStatusNotDetermined:
+    name = "not_determined";
+    break;
+  case UNAuthorizationStatusProvisional:
+    name = "provisional";
+    break;
+  default:
+    if (@available(iOS 14.0, *)) {
+      if (status == UNAuthorizationStatusEphemeral)
+        name = "ephemeral";
+    }
+    break;
+  }
+  return enif_make_tuple2(env, enif_make_atom(env, "ok"),
+                          enif_make_atom(env, name));
+}
+
 static ErlNifFunc nif_funcs[] = {
     {"notify_schedule", 1, nif_notify_schedule, 0},
     {"notify_cancel", 1, nif_notify_cancel, 0},
     {"notify_register_push", 0, nif_notify_register_push, 0},
+    {"notify_permission_status", 0, nif_notify_permission_status,
+     ERL_NIF_DIRTY_JOB_IO_BOUND},
 };
 
 ERL_NIF_INIT(mob_notify_nif, nif_funcs, NULL, NULL, NULL, NULL)

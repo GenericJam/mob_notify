@@ -34,11 +34,12 @@ defmodule MobNotify.MixProject do
 
   defp deps do
     # mob 0.9.8 delivers the documented `{:notification, map}` envelope
-    # (presentation/action, both platforms). :mob_dev is test-only (the
-    # manifest tests run the real pre-publish validator) and never ships.
+    # (presentation/action, both platforms); 0.9.15 ships Mob.Plugin.SelfTest.
+    # :mob_dev is test-only (the manifest tests run the real pre-publish
+    # validator) and never ships.
     [
-      {:mob, "~> 0.9.8"},
-      {:mob_dev, "~> 0.6", only: [:dev, :test], runtime: false},
+      {:mob, "~> 0.9 and >= 0.9.15"},
+      {:mob_dev, "~> 0.7.17", only: [:dev, :test], runtime: false},
       # Code quality — Credo + ex_slop (AI-pattern checks) + jump_credo_checks,
       # mirroring mob core's pre-commit gate.
       {:ex_doc, "~> 0.34", only: :dev, runtime: false},

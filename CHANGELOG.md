@@ -6,6 +6,31 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versioning: [S
 
 ---
 
+## [Unreleased]
+
+### Added
+
+- **On-device self-test** (MOB-418). `MobNotify.SelfTest` implements
+  `Mob.Plugin.SelfTest` and is declared in the manifest as `selftest:`. It
+  calls the new read-only NIF `notify_permission_status/0` (iOS:
+  `UNUserNotificationCenter getNotificationSettings`; Android:
+  `MobNotifyBridge.notify_permission_status()` →
+  `NotificationManager.areNotificationsEnabled()`), which never prompts and
+  posts nothing. Any `{:ok, status}` passes; an unregistered bridge, a bridge
+  with no Activity, an iOS timeout or an unlinked NIF fail. Run it with
+  `mix mob.selftest` from a host app (mob_dev 0.7.17). Requires mob 0.9.15;
+  `mob_version` in the manifest is now `~> 0.9`.
+
+### Fixed
+
+- **Android: an unregistered bridge no longer aborts the VM.**
+  `notify_schedule/1`, `notify_cancel/1` and `notify_register_push/0`
+  called into JNI with a null class / method id when
+  `MobNotifyBridge.register()` never ran or a method-ID lookup failed; they
+  now answer `{:error, :bridge_not_registered}`. `MobNotify.schedule/2`,
+  `cancel/2` and `register_push/1` are unchanged (they ignore the return
+  value).
+
 ## [0.2.0] - 2026-10-02
 
 ### Added
