@@ -99,6 +99,9 @@ fn callBridgePidStr(env: ?*erts.ErlNifEnv, method: jni.JMethodID, pid: erts.ErlN
     const jenv = get_jenv(&attached) orelse return erts.atom(env, "error");
     const jarg: jni.JString = if (arg) |a| jni.newStringUTF(jenv, a) else null;
     jenv.*.CallStaticVoidMethod.?(jenv, g_notify_cls, method, pidToJlong(pid), jarg);
+    // A throwable escaping Kotlin must not stay pending on an already-attached
+    // scheduler thread (the next JNI call there would be illegal).
+    jni.exceptionClear(jenv);
     if (jarg != null) jni.deleteLocalRef(jenv, jarg);
     detachIfAttached(attached);
     return erts.ok(env);
@@ -190,6 +193,7 @@ fn nif_notify_cancel(env: ?*erts.ErlNifEnv, argc: c_int, argv: [*]const erts.ERL
     const jenv = get_jenv(&attached) orelse return erts.atom(env, "error");
     const js: jni.JString = jni.newStringUTF(jenv, jni.asCStr(&buf));
     jenv.*.CallStaticVoidMethod.?(jenv, g_notify_cls, g_notify.notify_cancel, js);
+    jni.exceptionClear(jenv);
     if (js != null) jni.deleteLocalRef(jenv, js);
     detachIfAttached(attached);
     return erts.ok(env);
@@ -206,6 +210,7 @@ fn nif_notify_register_push(env: ?*erts.ErlNifEnv, argc: c_int, argv: [*]const e
     var attached: c_int = 0;
     const jenv = get_jenv(&attached) orelse return erts.atom(env, "error");
     jenv.*.CallStaticVoidMethod.?(jenv, g_notify_cls, g_notify.notify_register_push, pidToJlong(pid));
+    jni.exceptionClear(jenv);
     detachIfAttached(attached);
     return erts.ok(env);
 }

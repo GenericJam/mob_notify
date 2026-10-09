@@ -208,6 +208,37 @@ defmodule MobNotifyTest do
       assert Enum.sort(zig_table) == stub
     end
 
+    # nativeRegister looks each bridge method up by name + JNI signature; a
+    # mismatch leaves the id null and the NIF answers bridge_not_registered on
+    # device. Every lookup must match a @JvmStatic Kotlin method's types.
+    # Guards the native sources, not app code — VacuousTest can't see that.
+    # credo:disable-for-next-line Jump.CredoChecks.VacuousTest
+    test "every zig method-ID lookup matches a @JvmStatic Kotlin bridge method" do
+      zig = File.read!(Path.join(@plugin_dir, "priv/native/jni/mob_notify_nif.zig"))
+      kt = File.read!(Path.join(@plugin_dir, "priv/native/android/MobNotifyBridge.kt"))
+
+      lookups = Regex.scan(~r/lookupStatic\(jenv, cls, "(\w+)", "\(([^)]*)\)(\w)"\)/, zig)
+      assert [_, _, _, _] = lookups
+
+      jni_type = fn
+        "J" -> "Long"
+        "I" -> "Int"
+        "Ljava/lang/String;" -> "String"
+      end
+
+      for [_, name, args, ret] <- lookups do
+        arg_types = for [t] <- Regex.scan(~r/J|I|L[^;]+;/, args), do: jni_type.(t)
+
+        assert [_, params, kt_ret] =
+                 Regex.run(~r/@JvmStatic\s+fun #{name}\(([^)]*)\)(: \w+|)/, kt),
+               "no @JvmStatic fun #{name} in MobNotifyBridge.kt"
+
+        kt_types = for [_, t] <- Regex.scan(~r/\w+: (\w+)/, params), do: t
+        assert kt_types == arg_types, "#{name}: Kotlin params #{inspect(kt_types)}"
+        assert kt_ret == if(ret == "V", do: "", else: ": " <> jni_type.(ret))
+      end
+    end
+
     # Guards the .erl stub / manifest, not app code — VacuousTest can't see that.
     # credo:disable-for-next-line Jump.CredoChecks.VacuousTest
     test "host (no native linked) falls back to nif_not_loaded, not a load crash" do
